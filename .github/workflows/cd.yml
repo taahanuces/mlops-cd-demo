@@ -25,7 +25,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run tests
-        run: pytest
+        run: python -m pytest
 
   build:
     needs: test
@@ -73,26 +73,19 @@ jobs:
     environment:
       name: staging
     steps:
-      - name: Deploy to staging
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.STAGING_HOST }}
-          username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
-          script: |
-            docker pull ghcr.io/${{ github.repository }}:${{ needs.build.outputs.version }}
-            docker stop mlops-api || true
-            docker rm mlops-api || true
-            docker run -d \
-              --name mlops-api \
-              --restart unless-stopped \
-              -p 5000:5000 \
-              ghcr.io/${{ github.repository }}:${{ needs.build.outputs.version }}
+      - name: Deploy to staging (on runner)
+        run: |
+          docker pull ghcr.io/${{ github.repository }}:${{ needs.build.outputs.version }}
+          docker rm -f mlops-api-staging || true
+          docker run -d \
+            --name mlops-api-staging \
+            -p 5000:5000 \
+            ghcr.io/${{ github.repository }}:${{ needs.build.outputs.version }}
 
       - name: Smoke test staging
         run: |
           sleep 5
-          curl --fail http://${{ secrets.STAGING_HOST }}:5000/health
+          curl --fail http://localhost:5000/health
 
   deploy-production:
     needs:
@@ -102,23 +95,16 @@ jobs:
     environment:
       name: production
     steps:
-      - name: Deploy to production
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.PRODUCTION_HOST }}
-          username: ${{ secrets.PRODUCTION_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_KEY }}
-          script: |
-            docker pull ghcr.io/${{ github.repository }}:${{ needs.build.outputs.version }}
-            docker stop mlops-api || true
-            docker rm mlops-api || true
-            docker run -d \
-              --name mlops-api \
-              --restart unless-stopped \
-              -p 5000:5000 \
-              ghcr.io/${{ github.repository }}:${{ needs.build.outputs.version }}
+      - name: Deploy to production (on runner)
+        run: |
+          docker pull ghcr.io/${{ github.repository }}:${{ needs.build.outputs.version }}
+          docker rm -f mlops-api-production || true
+          docker run -d \
+            --name mlops-api-production \
+            -p 5001:5000 \
+            ghcr.io/${{ github.repository }}:${{ needs.build.outputs.version }}
 
       - name: Smoke test production
         run: |
           sleep 5
-          curl --fail http://${{ secrets.PRODUCTION_HOST }}:5000/health
+          curl --fail http://localhost:5001/health
